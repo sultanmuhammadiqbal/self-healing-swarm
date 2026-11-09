@@ -1,0 +1,42 @@
+name: Daily Autonomous Ad & SEO Swarm
+
+on:
+  schedule:
+    # Jalan otomatis setiap jam 06:00 WIB (23:00 UTC)
+    - cron: '0 23 * * *'
+  workflow_dispatch: # Bisa di-trigger manual kapan saja dari tab Actions GitHub
+
+jobs:
+  run-self-healing-swarm:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Execute LangGraph Autonomous Swarm
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GOOGLE_SHEET_KEY: ${{ secrets.GOOGLE_SHEET_KEY }}
+          GOOGLE_APPS_SCRIPT_WEBHOOK_URL: ${{ secrets.GOOGLE_APPS_SCRIPT_WEBHOOK_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          python main.py

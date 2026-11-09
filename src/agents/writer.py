@@ -480,7 +480,10 @@ def writer_node(state: SwarmState) -> dict:
     # 2. Simpan ke Supabase Cloud DB (`swarm_audit_logs`)
     save_to_supabase_audit_logs(log_entry)
 
-    # 3. Kirim notifikasi Webhook otomatis (Discord / Telegram)
+    # 3. Tembak hasil final yang lolos sensor ke Google Sheets (Draft / Queue)
+    push_to_google_sheets(csv_record)
+
+    # 4. Kirim notifikasi Webhook otomatis (Discord / Telegram)
     send_webhook_notification(log_entry)
 
     return {

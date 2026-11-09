@@ -152,7 +152,44 @@ async function readDebateLogs() {
   }
 }
 
-function readGscSample() {
+async function readGscSample(env: Record<string, string>) {
+  // 1. Coba tarik data anomali harian langsung dari Google Sheets (Apps Script Bridge)
+  const appsScriptUrl = (env.GOOGLE_APPS_SCRIPT_WEBHOOK_URL || "").trim();
+  if (appsScriptUrl && appsScriptUrl.startsWith("https://script.google.com")) {
+    try {
+      const gsRes = await fetch(appsScriptUrl, { cache: "no-store" });
+      if (gsRes.ok) {
+        const gsData = await gsRes.json();
+        if (Array.isArray(gsData.records) && gsData.records.length > 0) {
+          return gsData.records.map((r: Record<string, any>) => {
+            const prev = parseFloat(String(r.previous_ctr || "0").replace("%", "")) || 0;
+            const curr = parseFloat(String(r.current_ctr || "0").replace("%", "")) || 0;
+            const dropPct = prev > 0 ? ((curr - prev) / prev) * 100 : 0;
+            const statusStr = String(r.status || "ACTIVE").toUpperCase();
+            const isAnomaly = dropPct <= -30 || statusStr === "DISAPPROVED";
+            return {
+              date: String(r.date || new Date().toISOString().slice(0, 10)),
+              product_name: String(r.product_name || r.url || "Product"),
+              url: String(r.url || ""),
+              impressions: String(r.impressions || "0"),
+              clicks: String(r.clicks || "0"),
+              previous_ctr: String(r.previous_ctr || "0%"),
+              current_ctr: String(r.current_ctr || "0%"),
+              ad_spend_idr: String(r.ad_spend_idr || "0"),
+              conversions: String(r.conversions || "0"),
+              status: statusStr,
+              drop_percentage: `${dropPct.toFixed(1)}%`,
+              is_anomaly: isAnomaly,
+            };
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("Google Sheets GET fallback to CSV:", e);
+    }
+  }
+
+  // 2. Fallback ke CSV lokal / Default Monitored Products
   const csvPath = path.join(getRootDir(), "data", "gsc_sample.csv");
   if (!fs.existsSync(csvPath)) return DEFAULT_MONITORED_PRODUCTS;
   try {
@@ -194,17 +231,21 @@ async function runServerlessCloudSwarm(
     throw new Error("GROQ_API_KEY belum dikonfigurasi di Environment Variables.");
   }
 
-  // Node 1: Watcher Agent
-  const targetUrl =
-    customTargetUrl ||
-    "https://tokofurnitur.id/produk/kasur-orthopedic-queen";
+  // Node 1: Watcher Agent (Tarik dari Google Sheets / CSV)
+  const monitored = await readGscSample(env);
+  const anomalies = monitored.filter((m: any) => m.is_anomaly);
+  const pickedAnomaly = anomalies[0] || DEFAULT_MONITORED_PRODUCTS[5];
+
+  const targetUrl = customTargetUrl || pickedAnomaly.url;
   const isCustom = Boolean(customTargetUrl);
   const productName = isCustom
     ? `Live Target (${targetUrl})`
-    : "Kasur Pocket Spring Orthopedic Queen";
+    : pickedAnomaly.product_name;
   const issueType = isCustom
     ? "LIVE_URL_AUDIT: Audit langsung pada halaman live untuk mengoptimalkan Title, Meta Description, Ad Copy & JSON-LD Schema."
-    : "CRITICAL_CTR_DROP (-71.4%): CTR anjlok dari 4.2% ke 1.2% pada 22.100 impresi dengan Ad Spend Rp 1.250.000.";
+    : pickedAnomaly.status === "DISAPPROVED"
+      ? `DISAPPROVED_MERCHANT: Produk ditolak di Google Merchant Center dengan CTR drop ${pickedAnomaly.drop_percentage}.`
+      : `CRITICAL_CTR_DROP (${pickedAnomaly.drop_percentage}): CTR anjlok dari ${pickedAnomaly.previous_ctr} ke ${pickedAnomaly.current_ctr} pada ${pickedAnomaly.impressions} impresi.`;
 
   // Node 2: Live Scraping (HTML DOM + Jina Reader)
   let currentTitle = "Halaman Produk Tanpa Judul Teroptimasi";
@@ -375,6 +416,33 @@ Hasilkan JSON murni (tanpa markdown code block) dengan struktur persis berikut:
     });
   }
 
+  // Tembak hasil final yang lolos sensor ke Google Sheets (tab Approval_Queue)
+  const appsScriptUrl = (env.GOOGLE_APPS_SCRIPT_WEBHOOK_URL || "").trim();
+  if (appsScriptUrl && appsScriptUrl.startsWith("https://script.google.com")) {
+    try {
+      await fetch(appsScriptUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: runId,
+          timestamp: nowIso,
+          product_name: productName,
+          product_url: targetUrl,
+          approval_status: "PENDING",
+          final_score: parsed.critic_score || 95,
+          iterations: 2,
+          approved_title: finalSolution.title_tag || "",
+          approved_meta_description: finalSolution.meta_description || "",
+          approved_ad_headline: finalSolution.ad_copy_headline || "",
+          approved_ad_body: finalSolution.ad_copy_body || "",
+          schema_json_ld: finalSolution.schema_json_ld || "",
+        }),
+      });
+    } catch (e) {
+      console.warn("Google Sheets draft push warning:", e);
+    }
+  }
+
   // Kirim Notifikasi Telegram via @Runeswarmbot
   const tgToken = (env.TELEGRAM_BOT_TOKEN || "").trim();
   const tgChatId = (env.TELEGRAM_CHAT_ID || "").trim();
@@ -410,7 +478,7 @@ Hasilkan JSON murni (tanpa markdown code block) dengan struktur persis berikut:
 export async function GET() {
   const { isValid, env } = getSupabaseConfig();
   const logs = await readDebateLogs();
-  const monitoredProducts = readGscSample();
+  const monitoredProducts = await readGscSample(env);
   return NextResponse.json({
     logs,
     monitoredProducts,
@@ -479,7 +547,7 @@ export async function POST(req: NextRequest) {
     }
 
     const logs = await readDebateLogs();
-    const monitoredProducts = readGscSample();
+    const monitoredProducts = await readGscSample(env);
 
     return NextResponse.json({
       success: true,

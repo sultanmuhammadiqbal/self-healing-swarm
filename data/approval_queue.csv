@@ -69,3 +69,19 @@ timestamp,product_name,target_url,workflow_status,critic_score,total_rounds,appr
     ""itemCondition"": ""https://schema.org/NewCondition""
   }
 }","Title tag now 56 characters, descriptive and keyword‑rich, addressing the lack of specificity. Meta description fills the empty slot with a compelling offer (free shipping, 1‑year warranty) and UVP, keeping it within 125‑148 characters to avoid truncation. The ad copy headline and body highlight the premium nature and free shipping, providing a clear CTA to drive clicks. JSON‑LD schema adds structured data for a flagship product, improving rich‑snippet visibility. These changes target the identified gaps—empty meta, generic title, missing H1—thereby improving CTR and relevance in SERPs."
+2026-11-09 19:04:12,run-1794225852,Stone Island (Stone Island | Senikersku),https://senikersku.com/product-category/apparel/stone-island/,APPROVED,PENDING,92,2,"Stone Island – Jaket, Hoodie & Tee | Gratis Ongkir","Temukan koleksi Stone Island di Senikersku: jaket, hoodie, dan tee dengan garansi ukuran tepat serta gratis ongkir minimal 1jt. Belanja sekarang!",Stone Island – Gratis Ongkir & Garansi Ukuran!,"Jelajahi jaket, hoodie, dan tee Stone Island asli di Senikersku. Dapatkan gratis ongkir untuk belanja >1jt, garansi ukuran tepat, serta harga promo terbatas. Klik & beli sekarang!","{
+  ""@context"": ""https://schema.org"",
+  ""@type"": ""Product"",
+  ""name"": ""Stone Island Apparel"",
+  ""brand"": ""Stone Island"",
+  ""offers"": {
+    ""@type"": ""AggregateOffer"",
+    ""priceCurrency"": ""IDR"",
+    ""lowPrice"": ""1200000"",
+    ""highPrice"": ""4500000"",
+    ""offerCount"": ""10"",
+    ""availability"": ""https://schema.org/InStock""
+  },
+  ""url"": ""https://senikersku.com/product-category/apparel/stone-island/"",
+  ""description"": ""Koleksi resmi Stone Island – jaket, hoodie, dan tee dengan garansi ukuran tepat serta gratis ongkir minimal 1jt.""
+}","Title tag dipangkas menjadi 50 karakter (45‑57 batas) sambil tetap menonjolkan kata kunci utama 'Stone Island' dan UVP 'Gratis Ongkir'. Meta description dipersingkat menjadi 144 karakter (125‑148 batas) dengan menempatkan keyword di awal, menyoroti manfaat garansi ukuran tepat, gratis ongkir, dan CTA 'Belanja sekarang!'. Ad copy disesuaikan untuk menghilangkan klaim salah ('garansi ukuran salah') dan tetap menekankan UVP serta CTA kuat. Schema JSON‑LD tetap valid, menambahkan deskripsi yang selaras dengan meta description untuk memperkuat rich snippet."

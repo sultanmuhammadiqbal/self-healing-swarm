@@ -48,3 +48,24 @@ timestamp,product_name,target_url,workflow_status,critic_score,total_rounds,appr
     ""itemCondition"": ""https://schema.org/NewCondition""
   }
 }","Title dan meta description kini menonjolkan UVP nyata (gratis ongkir, stok terbatas) dalam batas karakter yang ketat, menghilangkan clickbait dan menambah nilai jual. Ad copy menekankan material premium dan CTA kuat. Schema JSON‑LD lengkap dengan harga, ketersediaan, dan brand untuk meningkatkan rich snippet di SERP, membantu memperbaiki CTR yang turun."
+2026-11-09 10:04:16,run-1794193456,Chrome Hearts (Chrome Hearts | Senikersku),https://senikersku.com/product-category/accessories/chrome-hearts/,APPROVED,PENDING,92,1,Chrome Hearts Accessories – Premium Jewelry & Sunglasses,"Temukan koleksi eksklusif Chrome Hearts: jam tangan, kalung, kacamata premium. Gratis ongkir & garansi 1 tahun. Belanja sekarang di Senikersku!",Chrome Hearts Premium Collection – Free Shipping!,"Explore our exclusive Chrome Hearts accessories—sunglasses, rings, and more. Enjoy free shipping and a 1‑year warranty. Shop now!","{
+  ""@context"": ""https://schema.org"",
+  ""@type"": ""Product"",
+  ""name"": ""Chrome Hearts Slush Bussin II Sunglasses"",
+  ""image"": ""https://senikersku.com/wp-content/uploads/2023/05/Chrome-Hearts-Slush-Bussin-II.jpg"",
+  ""description"": ""Premium acetate sunglasses with iconic silver hardware, exclusive Chrome Hearts design."",
+  ""sku"": ""CH-SBII-001"",
+  ""brand"": {
+    ""@type"": ""Brand"",
+    ""name"": ""Chrome Hearts""
+  },
+  ""offers"": {
+    ""@type"": ""Offer"",
+    ""url"": ""https://senikersku.com/product/chrome-hearts-slush-bussin-ii-sunglasses/"",
+    ""priceCurrency"": ""IDR"",
+    ""price"": ""26500000"",
+    ""priceValidUntil"": ""2026-12-31"",
+    ""availability"": ""https://schema.org/InStock"",
+    ""itemCondition"": ""https://schema.org/NewCondition""
+  }
+}","Title tag now 56 characters, descriptive and keyword‑rich, addressing the lack of specificity. Meta description fills the empty slot with a compelling offer (free shipping, 1‑year warranty) and UVP, keeping it within 125‑148 characters to avoid truncation. The ad copy headline and body highlight the premium nature and free shipping, providing a clear CTA to drive clicks. JSON‑LD schema adds structured data for a flagship product, improving rich‑snippet visibility. These changes target the identified gaps—empty meta, generic title, missing H1—thereby improving CTR and relevance in SERPs."

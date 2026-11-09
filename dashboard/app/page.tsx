@@ -13,6 +13,7 @@ import {
   Database,
   Eye,
   FileCheck2,
+  Film,
   Flame,
   GitCompare,
   Globe,
@@ -27,6 +28,7 @@ import {
   Terminal,
   Zap,
 } from "lucide-react";
+import VideoFactoryView from "./components/VideoFactoryView";
 
 interface DraftSolution {
   title_tag: string;
@@ -166,17 +168,34 @@ export default function NasaSwarmCommandCenter() {
     }, 2200);
 
     try {
-      const res = await fetch("/api/swarm", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetUrl: urlToRun }),
-      });
-      const data = await res.json();
-      if (data.logs) {
+      let data: any = null;
+      try {
+        const res = await fetch("/api/swarm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ targetUrl: urlToRun }),
+        });
+        if (res.ok) {
+          data = await res.json();
+        }
+      } catch (e) {
+        // fallback to live-heal
+      }
+
+      if (!data || !data.logs || data.logs.length === 0) {
+        const healRes = await fetch("/api/swarm/live-heal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ targetUrl: urlToRun }),
+        });
+        data = await healRes.json();
+      }
+
+      if (data?.logs && data.logs.length > 0) {
         setLogs(data.logs);
         setSelectedRunIdx(0);
       }
-      if (data.monitoredProducts) {
+      if (data?.monitoredProducts) {
         setMonitoredProducts(data.monitoredProducts);
       }
       if (customLiveUrl.trim()) {
@@ -219,6 +238,46 @@ export default function NasaSwarmCommandCenter() {
     } finally {
       setIsApprovingId(null);
     }
+  };
+
+  const [activeModule, setActiveModule] = useState<"swarm" | "factory">("swarm");
+  const [factoryProduct, setFactoryProduct] = useState<{
+    product_name?: string;
+    url?: string;
+    price?: string;
+    features?: string;
+    copywriting?: string;
+  }>({
+    product_name: "AeroStreet Vulcan X-Pro",
+    url: "https://aerostreet.id/products/vulcan-xpro",
+    price: "Rp 249.000",
+    features: "Sol Nitro-Bounce ultra empuk, breathable carbon mesh, anti-slip grip",
+    copywriting: "Kaki anti-pegal pakai AeroStreet Vulcan X-Pro! Sol Nitro-Bounce ultra empuk seharian.",
+  });
+
+  const handleTriggerVideoFactory = (run?: SwarmRunLog) => {
+    if (!run) return;
+    const name = run.product_name || "Produk Pilihan";
+    const url = run.target_url || "";
+    const price = run.diagnostic_data?.detected_price || "Rp 249.000";
+    const features =
+      run.diagnostic_data?.key_features?.join(", ") ||
+      run.final_solution?.ad_copy_headline ||
+      "Bahan Premium Berkualitas, Tahan Lama, Garansi Resmi";
+    const copywriting =
+      run.final_solution?.ad_copy_headline ||
+      run.final_solution?.title_tag ||
+      "";
+
+    setFactoryProduct({
+      product_name: name,
+      url,
+      price,
+      features,
+      copywriting,
+    });
+    setActiveModule("factory");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const replayDagAnimation = () => {
@@ -339,8 +398,80 @@ export default function NasaSwarmCommandCenter() {
     <div className="min-h-screen bg-[#050811] text-slate-100 pb-16">
       <div className="fixed inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-950/20 via-[#050811] to-[#050811] z-0" />
 
-      {/* NASA COMMAND HEADER */}
-      <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-[#070b17]/90 backdrop-blur-md">
+      {/* 🚀 AUTONOMOUS AI MARKETING OS — MASTER UNIFIED NAVBAR */}
+      <nav className="sticky top-0 z-40 border-b border-slate-800/90 bg-[#060a16]/95 backdrop-blur-xl">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-cyan-500 via-indigo-600 to-purple-600 p-0.5 shadow-[0_0_20px_rgba(6,182,212,0.35)]">
+              <div className="h-full w-full bg-slate-950 rounded-[10px] flex items-center justify-center">
+                <Sparkles className="h-5 w-5 text-cyan-400" />
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-black tracking-wider text-white font-mono">
+                  AUTONOMOUS AI MARKETING OS
+                </span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+                  UNIFIED v3.0
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 font-sans">
+                Self-Healing SEO & Ad Swarm ⟷ Zero-Touch 60fps Video Factory
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center p-1 rounded-xl bg-slate-900/90 border border-slate-800 text-xs font-mono">
+            <button
+              onClick={() => setActiveModule("swarm")}
+              className={`px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-2 transition cursor-pointer ${
+                activeModule === "swarm"
+                  ? "bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <Bot className="h-4 w-4" />
+              <span>MODUL 1: 🛡️ SEO & AD SWARM</span>
+            </button>
+            <button
+              onClick={() => setActiveModule("factory")}
+              className={`px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-2 transition cursor-pointer ${
+                activeModule === "factory"
+                  ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-[0_0_15px_rgba(168,85,247,0.4)]"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <Film className="h-4 w-4" />
+              <span>MODUL 2: 🎬 60FPS VIDEO FACTORY</span>
+            </button>
+          </div>
+
+          <div className="hidden lg:flex items-center gap-2 font-mono text-[10px]">
+            <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Swarm DAG: ONLINE
+            </span>
+            <span className="px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/30 flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-purple-400 animate-pulse" />
+              Remotion 60fps: READY
+            </span>
+            <span className="px-2.5 py-1 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
+              Bridge Link: ACTIVE
+            </span>
+          </div>
+        </div>
+      </nav>
+
+      {activeModule === "factory" ? (
+        <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 pt-6">
+          <VideoFactoryView initialProduct={factoryProduct} />
+        </main>
+      ) : (
+        <>
+          {/* NASA COMMAND HEADER */}
+          <header className="sticky top-[61px] z-30 border-b border-slate-800/80 bg-[#070b17]/90 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className="h-11 w-11 rounded-xl bg-cyan-500/10 border border-cyan-500/40 flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.25)]">
@@ -1074,11 +1205,20 @@ export default function NasaSwarmCommandCenter() {
               {currentRun && (
                 <div className="pt-2">
                   {currentApprovalStatus === "APPROVED" ? (
-                    <div className="w-full py-3 px-4 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 font-mono text-xs font-bold flex items-center justify-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                      <span>
-                        APPROVED & PUSHED TO PRODUCTION / SHEETS
-                      </span>
+                    <div className="space-y-2">
+                      <div className="w-full py-3 px-4 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 font-mono text-xs font-bold flex items-center justify-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                        <span>
+                          APPROVED & PUSHED TO PRODUCTION / SHEETS
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleTriggerVideoFactory(currentRun)}
+                        className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-500 hover:opacity-95 text-white font-mono text-xs font-bold shadow-[0_0_25px_rgba(168,85,247,0.35)] flex items-center justify-center gap-2 transition cursor-pointer"
+                      >
+                        <Sparkles className="h-4 w-4 text-cyan-300" />
+                        <span>🎬 Generate 60fps Promo Video from Approved SEO</span>
+                      </button>
                     </div>
                   ) : (
                     <button
@@ -1229,6 +1369,8 @@ export default function NasaSwarmCommandCenter() {
           </div>
         </section>
       </main>
+        </>
+      )}
     </div>
   );
 }

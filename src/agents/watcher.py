@@ -45,8 +45,62 @@ def load_monitoring_records() -> List[Dict[str, Any]]:
         except Exception as e:
             print(f"[Watcher Warning] Gagal baca Google Apps Script URL: {e}. Mencoba jalur lain...")
 
+    sheet_name_or_key = os.getenv("GOOGLE_SHEET_KEY", "").strip()
+    if sheet_name_or_key and len(sheet_name_or_key) > 20:
+        # Coba tarik langsung dari Google Sheets export URL (Instant HTTP, mendukung format SEO Opportunity)
+        try:
+            export_url = f"https://docs.google.com/spreadsheets/d/{sheet_name_or_key}/export?format=csv"
+            with httpx.Client(timeout=15.0, follow_redirects=True) as client:
+                resp = client.get(export_url)
+                if resp.status_code == 200 and resp.text:
+                    import io
+                    reader = csv.DictReader(io.StringIO(resp.text))
+                    sheet_rows = list(reader)
+                    if sheet_rows:
+                        parsed_records = []
+                        for row in sheet_rows:
+                            # Cek format: Apakah format 'AI SEO Opportunity Prioritizer'
+                            if "Main Query" in row or "Target Page" in row:
+                                target_page = (row.get("Target Page") or "").strip()
+                                key_url = (row.get("Key") or "").strip()
+                                full_url = key_url if key_url.startswith("http") else f"https://senikersku.com{target_page}" if target_page.startswith("/") else target_page
+                                if not full_url:
+                                    continue
+
+                                query = (row.get("Main Query") or "SEO Opportunity").strip()
+                                title_current = (row.get("Current SEO Title") or "").strip()
+                                prod_name = f"{query.title()} ({title_current})" if title_current else query.title()
+
+                                imps = int(str(row.get("Impressions", 0)).replace(",", "").replace(".", "") or 0)
+                                clks = int(str(row.get("Clicks", 0)).replace(",", "").replace(".", "") or 0)
+                                curr_ctr = (clks / imps * 100) if imps > 0 else 0.5
+                                prev_ctr = 2.5
+                                drop_pct = ((curr_ctr - prev_ctr) / prev_ctr) * 100
+
+                                status = (row.get("Status") or "TODO").strip().upper()
+                                if row.get("Title Needs Keyword") == "YA" and status == "TODO":
+                                    status = "ANOMALY_OPPORTUNITY"
+
+                                parsed_records.append({
+                                    "product_name": prod_name,
+                                    "url": full_url,
+                                    "previous_ctr": f"{prev_ctr:.1f}%",
+                                    "current_ctr": f"{curr_ctr:.2f}%",
+                                    "impressions": imps,
+                                    "clicks": clks,
+                                    "status": status,
+                                    "drop_percentage": f"{drop_pct:.1f}%",
+                                    "target_keyword": query,
+                                    "notes": row.get("Notes", ""),
+                                })
+                            else:
+                                parsed_records.append(row)
+                        if parsed_records:
+                            return parsed_records
+        except Exception as e:
+            print(f"[Watcher Warning] Gagal export CSV Google Sheet: {e}. Mencoba jalur lain...")
+
     creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "credentials.json")
-    sheet_name_or_key = os.getenv("GOOGLE_SHEET_KEY")
 
     if os.path.exists(creds_path) and sheet_name_or_key:
         try:

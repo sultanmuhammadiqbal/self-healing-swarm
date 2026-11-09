@@ -153,7 +153,91 @@ async function readDebateLogs() {
 }
 
 async function readGscSample(env: Record<string, string>) {
-  // 1. Coba tarik data anomali harian langsung dari Google Sheets (Apps Script Bridge)
+  // 1. Coba tarik data langsung dari Google Sheets via Export CSV URL (Instant, tanpa credential ribet)
+  const sheetKey = (env.GOOGLE_SHEET_KEY || "").trim();
+  if (sheetKey && sheetKey.length > 20) {
+    try {
+      const exportUrl = `https://docs.google.com/spreadsheets/d/${sheetKey}/export?format=csv`;
+      const exportRes = await fetch(exportUrl, { cache: "no-store" });
+      if (exportRes.ok) {
+        const csvText = await exportRes.text();
+        const lines = csvText.split(/\r?\n/).filter((l) => l.trim().length > 0);
+        if (lines.length > 1) {
+          const rawHeaders = lines[0].split(",").map((h) => h.replace(/^"|"$/g, "").trim());
+          const records: any[] = [];
+          for (let i = 1; i < lines.length; i++) {
+            // Simple CSV line splitter that handles basic quoted commas
+            const rowValues: string[] = [];
+            let inQuotes = false;
+            let currentVal = "";
+            for (let c = 0; c < lines[i].length; c++) {
+              const char = lines[i][c];
+              if (char === '"') inQuotes = !inQuotes;
+              else if (char === ',' && !inQuotes) {
+                rowValues.push(currentVal.replace(/^"|"$/g, "").trim());
+                currentVal = "";
+              } else {
+                currentVal += char;
+              }
+            }
+            rowValues.push(currentVal.replace(/^"|"$/g, "").trim());
+
+            const row: Record<string, string> = {};
+            rawHeaders.forEach((h, idx) => {
+              row[h] = rowValues[idx] || "";
+            });
+
+            // Format khusus AI SEO Opportunity Prioritizer (Senikersku)
+            if (row["Main Query"] || row["Target Page"]) {
+              const targetPage = (row["Target Page"] || "").trim();
+              const keyUrl = (row["Key"] || "").trim();
+              const fullUrl = keyUrl.startsWith("http")
+                ? keyUrl
+                : targetPage.startsWith("/")
+                ? `https://senikersku.com${targetPage}`
+                : targetPage;
+              if (!fullUrl) continue;
+
+              const query = (row["Main Query"] || "SEO Opportunity").trim();
+              const titleCurr = (row["Current SEO Title"] || "").trim();
+              const prodName = titleCurr ? `${query} (${titleCurr})` : query;
+              const imps = parseInt((row["Impressions"] || "0").replace(/,/g, ""), 10) || 0;
+              const clks = parseInt((row["Clicks"] || "0").replace(/,/g, ""), 10) || 0;
+              const currCtr = imps > 0 ? (clks / imps) * 100 : 0.5;
+              const prevCtr = 2.5;
+              const dropPct = ((currCtr - prevCtr) / prevCtr) * 100;
+              let status = (row["Status"] || "TODO").trim().toUpperCase();
+              if (row["Title Needs Keyword"] === "YA" && status === "TODO") {
+                status = "ANOMALY_OPPORTUNITY";
+              }
+
+              records.push({
+                date: row["Date Done"] || "2026-11-09",
+                product_name: prodName,
+                url: fullUrl,
+                impressions: imps.toLocaleString(),
+                clicks: clks.toLocaleString(),
+                previous_ctr: `${prevCtr.toFixed(1)}%`,
+                current_ctr: `${currCtr.toFixed(2)}%`,
+                ad_spend_idr: "0",
+                conversions: row["Est. Click Gain"] || "0",
+                status: status,
+                drop_percentage: `${dropPct.toFixed(1)}%`,
+                is_anomaly: status === "ANOMALY_OPPORTUNITY" || dropPct <= -30,
+              });
+            }
+          }
+          if (records.length > 0) {
+            return records;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Google Sheet direct CSV export error:", e);
+    }
+  }
+
+  // 2. Coba tarik data anomali harian langsung dari Google Sheets (Apps Script Bridge)
   const appsScriptUrl = (env.GOOGLE_APPS_SCRIPT_WEBHOOK_URL || "").trim();
   if (appsScriptUrl && appsScriptUrl.startsWith("https://script.google.com")) {
     try {

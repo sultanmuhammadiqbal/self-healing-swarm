@@ -18,17 +18,37 @@ import {
   GitCompare,
   Globe,
   Layers,
+  Mic,
   Play,
+  Radio,
   RefreshCw,
   RotateCcw,
   Scale,
   Search,
   Send,
+  ShieldCheck,
   Sparkles,
   Terminal,
+  Users,
   Zap,
 } from "lucide-react";
-import VideoFactoryView from "./components/VideoFactoryView";
+import VideoFactoryView, {
+  SyncedProductPayload,
+} from "./components/VideoFactoryView";
+import { CloserProduct, PRESET_PRODUCTS } from "../types/closer";
+import { LiveCloserModule } from "../components/closer/LiveCloserModule";
+import { LiveStreamHostModule } from "../components/modules/LiveStreamHostModule";
+import { NeuralAdForgeModule } from "../components/modules/NeuralAdForgeModule";
+import { SyntheticFocusGroupModule } from "../components/modules/SyntheticFocusGroupModule";
+import { GodButtonOrchestratorModal } from "../components/orchestrator/GodButtonOrchestratorModal";
+
+type SuperModuleTab =
+  | "swarm"
+  | "factory"
+  | "live-closer"
+  | "livestream-host"
+  | "neural-ad-forge"
+  | "focus-group";
 
 interface DraftSolution {
   title_tag: string;
@@ -194,6 +214,17 @@ export default function NasaSwarmCommandCenter() {
       if (data?.logs && data.logs.length > 0) {
         setLogs(data.logs);
         setSelectedRunIdx(0);
+        const latestRun: SwarmRunLog = data.logs[0];
+        syncProductToGlobalLock({
+          product_name: latestRun.product_name || "AERO NITRO-BOUNCE X9",
+          url: latestRun.target_url || urlToRun,
+          price: latestRun.diagnostic_data?.detected_price || "Rp 2.490.000",
+          features:
+            latestRun.diagnostic_data?.key_features?.join(", ") ||
+            latestRun.final_solution?.ad_copy_headline ||
+            "Sol Nitro-Bounce 42mm ultra empuk, Carbon Torq-Blade",
+          copywriting: latestRun.final_solution?.ad_copy_headline,
+        });
       }
       if (data?.monitoredProducts) {
         setMonitoredProducts(data.monitoredProducts);
@@ -240,7 +271,15 @@ export default function NasaSwarmCommandCenter() {
     }
   };
 
-  const [activeModule, setActiveModule] = useState<"swarm" | "factory">("swarm");
+  const [activeModule, setActiveModule] = useState<SuperModuleTab>("swarm");
+  const [allProducts, setAllProducts] =
+    useState<CloserProduct[]>(PRESET_PRODUCTS);
+  const [activeProduct, setActiveProduct] = useState<CloserProduct>(
+    PRESET_PRODUCTS[0]
+  );
+  const [customAngleImages] = useState<(string | null)[]>([null, null, null]);
+  const [isGodModalOpen, setIsGodModalOpen] = useState<boolean>(false);
+
   const [factoryProduct, setFactoryProduct] = useState<{
     product_name?: string;
     url?: string;
@@ -248,18 +287,92 @@ export default function NasaSwarmCommandCenter() {
     features?: string;
     copywriting?: string;
   }>({
-    product_name: "AeroStreet Vulcan X-Pro",
-    url: "https://aerostreet.id/products/vulcan-xpro",
-    price: "Rp 249.000",
-    features: "Sol Nitro-Bounce ultra empuk, breathable carbon mesh, anti-slip grip",
-    copywriting: "Kaki anti-pegal pakai AeroStreet Vulcan X-Pro! Sol Nitro-Bounce ultra empuk seharian.",
+    product_name: PRESET_PRODUCTS[0].name,
+    url: "https://senikersku.com/products/aero-nitro-bounce-x9",
+    price: PRESET_PRODUCTS[0].priceFormatted,
+    features: PRESET_PRODUCTS[0].specs.slice(0, 2).join(", "),
+    copywriting:
+      "Kaki anti-pegal pakai AERO NITRO-BOUNCE X9! Sol Nitro-Bounce 42mm ultra empuk seharian.",
   });
+
+  // Jembatan Data Global: Sinkronkan produk dari Modul 1 (Swarm) / Modul 2 (Factory) ke Global 1-Product Lock (Modul 3 s/d 6 + God-Button)
+  const syncProductToGlobalLock = (
+    payload: SyncedProductPayload
+  ): CloserProduct => {
+    const cleanName = (payload.product_name || "AERO NITRO-BOUNCE X9").trim();
+    const cleanPriceStr = (payload.price || "Rp 2.490.000").trim();
+    const numericMatch = cleanPriceStr.replace(/[^0-9]/g, "");
+    const priceNumeric =
+      numericMatch.length >= 4 ? parseInt(numericMatch, 10) : 2490000;
+    const featureList = (
+      payload.features ||
+      "Sol Nitro-Bounce 42mm ultra empuk, Carbon Torq-Blade, Breathable Mesh 3D"
+    )
+      .split(/[,|;]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const baseTemplate = PRESET_PRODUCTS[0];
+    const syncedCloserProduct: CloserProduct = {
+      ...baseTemplate,
+      id: cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      name: cleanName,
+      sku: `INGEST-${cleanName
+        .replace(/[^A-Z0-9]/gi, "")
+        .slice(0, 6)
+        .toUpperCase()}`,
+      priceNumeric,
+      priceFormatted: cleanPriceStr.startsWith("Rp")
+        ? cleanPriceStr
+        : `Rp ${priceNumeric.toLocaleString("id-ID")}`,
+      tagline: featureList[0] || baseTemplate.tagline,
+      specs:
+        featureList.length >= 2
+          ? [
+              ...featureList,
+              "Outsole Anti-Slip Grip & Garansi Resmi 1 Tahun",
+            ].slice(0, 4)
+          : baseTemplate.specs,
+      soleTech: featureList[0] || baseTemplate.soleTech,
+      upperMaterial: featureList[1] || baseTemplate.upperMaterial,
+    };
+
+    setActiveProduct(syncedCloserProduct);
+    setAllProducts((prev) => {
+      const exists = prev.some((p) => p.name === syncedCloserProduct.name);
+      if (exists) {
+        return prev.map((p) =>
+          p.name === syncedCloserProduct.name ? syncedCloserProduct : p
+        );
+      }
+      return [syncedCloserProduct, ...prev];
+    });
+    setFactoryProduct({
+      product_name: cleanName,
+      url: payload.url,
+      price: syncedCloserProduct.priceFormatted,
+      features: payload.features,
+      copywriting: payload.copywriting,
+    });
+    return syncedCloserProduct;
+  };
+
+  const handleSelectGlobalProduct = (prod: CloserProduct) => {
+    setActiveProduct(prod);
+    setFactoryProduct({
+      product_name: prod.name,
+      url: `https://senikersku.com/products/${prod.id}`,
+      price: prod.priceFormatted,
+      features: prod.specs.slice(0, 3).join(", "),
+      copywriting: prod.tagline,
+    });
+  };
 
   const handleTriggerVideoFactory = (run?: SwarmRunLog) => {
     if (!run) return;
     const name = run.product_name || "Produk Pilihan";
     const url = run.target_url || "";
-    const price = run.diagnostic_data?.detected_price || "Rp 249.000";
+    const price = run.diagnostic_data?.detected_price || "Rp 2.490.000";
     const features =
       run.diagnostic_data?.key_features?.join(", ") ||
       run.final_solution?.ad_copy_headline ||
@@ -269,7 +382,7 @@ export default function NasaSwarmCommandCenter() {
       run.final_solution?.title_tag ||
       "";
 
-    setFactoryProduct({
+    syncProductToGlobalLock({
       product_name: name,
       url,
       price,
@@ -277,6 +390,26 @@ export default function NasaSwarmCommandCenter() {
       copywriting,
     });
     setActiveModule("factory");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleTriggerCloserFromSwarm = (run?: SwarmRunLog) => {
+    if (!run) return;
+    const name = run.product_name || "Produk Pilihan";
+    const url = run.target_url || "";
+    const price = run.diagnostic_data?.detected_price || "Rp 2.490.000";
+    const features =
+      run.diagnostic_data?.key_features?.join(", ") ||
+      run.final_solution?.ad_copy_headline ||
+      "Bahan Premium Berkualitas, Tahan Lama, Garansi Resmi";
+
+    syncProductToGlobalLock({
+      product_name: name,
+      url,
+      price,
+      features,
+    });
+    setActiveModule("live-closer");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -398,80 +531,203 @@ export default function NasaSwarmCommandCenter() {
     <div className="min-h-screen bg-[#050811] text-slate-100 pb-16">
       <div className="fixed inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-950/20 via-[#050811] to-[#050811] z-0" />
 
-      {/* 🚀 AUTONOMOUS AI MARKETING OS — MASTER UNIFIED NAVBAR */}
+      {/* 🚀 6-IN-1 AUTONOMOUS AI MARKETING OS — MASTER UNIFIED NAVBAR */}
       <nav className="sticky top-0 z-40 border-b border-slate-800/90 bg-[#060a16]/95 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-cyan-500 via-indigo-600 to-purple-600 p-0.5 shadow-[0_0_20px_rgba(6,182,212,0.35)]">
-              <div className="h-full w-full bg-slate-950 rounded-[10px] flex items-center justify-center">
-                <Sparkles className="h-5 w-5 text-cyan-400" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 space-y-3">
+          {/* Top Brand + Global 1-Product Lock Status + "THE GOD-BUTTON" */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-400 via-rose-500 to-cyan-500 p-0.5 shadow-[0_0_25px_rgba(245,158,11,0.45)]">
+                <div className="h-full w-full bg-slate-950 rounded-[10px] flex items-center justify-center">
+                  <Cpu className="h-5 w-5 text-amber-400" />
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm sm:text-base font-extrabold tracking-tight text-white">
+                    6-IN-1 AUTONOMOUS AI MARKETING OS
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 font-mono text-[10px] font-bold">
+                    FULL 6-STAGE SUITE
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 font-sans">
+                  Swarm DAG &rarr; 60fps Video Factory &rarr; Voice Closer &rarr; 24/7 Host &rarr; Ad-Forge &rarr; Focus Group
+                </p>
               </div>
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-black tracking-wider text-white font-mono">
-                  AUTONOMOUS AI MARKETING OS
+
+            {/* Global Shared 1-Product Lock + "THE GOD-BUTTON" */}
+            <div className="flex flex-wrap items-center gap-2.5">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span className="text-slate-400 font-mono text-[11px]">
+                  1-PRODUCT LOCK:
                 </span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
-                  UNIFIED v3.0
+                <span className="font-extrabold text-white">
+                  {activeProduct.name}
+                </span>
+                <span className="text-emerald-400 font-mono font-bold">
+                  ({activeProduct.priceFormatted})
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 font-sans">
-                Self-Healing SEO & Ad Swarm ⟷ Zero-Touch 60fps Video Factory
-              </p>
+
+              {/* "THE GOD-BUTTON": 1-CLICK FULL AUTONOMOUS CAMPAIGN ORCHESTRATOR */}
+              <button
+                type="button"
+                onClick={() => setIsGodModalOpen(true)}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-slate-950 font-black text-xs tracking-wider flex items-center gap-2 shadow-[0_0_30px_rgba(245,158,11,0.55)] hover:brightness-110 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
+              >
+                <Zap className="w-4 h-4 fill-slate-950" />
+                ⚡ RUN 6-STAGE AUTONOMOUS CAMPAIGN
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center p-1 rounded-xl bg-slate-900/90 border border-slate-800 text-xs font-mono">
+          {/* 6-Module Unified Navigation Bar */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-900 text-xs font-mono">
             <button
+              type="button"
               onClick={() => setActiveModule("swarm")}
-              className={`px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-2 transition cursor-pointer ${
+              className={`px-3 py-2 rounded-xl font-bold flex items-center gap-1.5 border transition-all cursor-pointer ${
                 activeModule === "swarm"
-                  ? "bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]"
-                  : "text-slate-400 hover:text-white"
+                  ? "bg-emerald-500/20 border-emerald-400 text-white shadow-[0_0_18px_rgba(16,185,129,0.25)]"
+                  : "bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200"
               }`}
             >
-              <Bot className="h-4 w-4" />
-              <span>MODUL 1: 🛡️ SEO & AD SWARM</span>
+              <Activity className="h-3.5 w-3.5 text-emerald-400" />
+              <span>1. Self-Healing Swarm</span>
             </button>
-            <button
-              onClick={() => setActiveModule("factory")}
-              className={`px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-2 transition cursor-pointer ${
-                activeModule === "factory"
-                  ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-[0_0_15px_rgba(168,85,247,0.4)]"
-                  : "text-slate-400 hover:text-white"
-              }`}
-            >
-              <Film className="h-4 w-4" />
-              <span>MODUL 2: 🎬 60FPS VIDEO FACTORY</span>
-            </button>
-          </div>
 
-          <div className="hidden lg:flex items-center gap-2 font-mono text-[10px]">
-            <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Swarm DAG: ONLINE
-            </span>
-            <span className="px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/30 flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-purple-400 animate-pulse" />
-              Remotion 60fps: READY
-            </span>
-            <span className="px-2.5 py-1 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
-              Bridge Link: ACTIVE
-            </span>
+            <button
+              type="button"
+              onClick={() => setActiveModule("factory")}
+              className={`px-3 py-2 rounded-xl font-bold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                activeModule === "factory"
+                  ? "bg-purple-500/20 border-purple-400 text-white shadow-[0_0_18px_rgba(168,85,247,0.25)]"
+                  : "bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <Film className="h-3.5 w-3.5 text-purple-400" />
+              <span>2. 60fps Video Factory</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveModule("live-closer")}
+              className={`px-3 py-2 rounded-xl font-extrabold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                activeModule === "live-closer"
+                  ? "bg-cyan-500/20 border-cyan-400 text-white shadow-[0_0_20px_rgba(6,182,212,0.3)]"
+                  : "bg-slate-900/80 border-slate-800 text-slate-300 hover:border-cyan-500/50"
+              }`}
+            >
+              <Mic className="h-3.5 w-3.5 text-cyan-400" />
+              <span>3. Live Voice &amp; Vision Closer</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveModule("livestream-host")}
+              className={`px-3 py-2 rounded-xl font-extrabold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                activeModule === "livestream-host"
+                  ? "bg-rose-500/20 border-rose-400 text-white shadow-[0_0_20px_rgba(244,63,94,0.3)]"
+                  : "bg-slate-900/80 border-slate-800 text-slate-300 hover:border-rose-500/50"
+              }`}
+            >
+              <Radio className="h-3.5 w-3.5 text-rose-400 animate-pulse" />
+              <span>4. 24/7 AI Live Host</span>
+              <span className="px-1.5 py-0.5 rounded bg-rose-500 text-white font-mono text-[9px] font-black">
+                LIVE
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveModule("neural-ad-forge")}
+              className={`px-3 py-2 rounded-xl font-extrabold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                activeModule === "neural-ad-forge"
+                  ? "bg-amber-500/20 border-amber-400 text-white shadow-[0_0_20px_rgba(245,158,11,0.3)]"
+                  : "bg-slate-900/80 border-slate-800 text-slate-300 hover:border-amber-500/50"
+              }`}
+            >
+              <Eye className="h-3.5 w-3.5 text-amber-400" />
+              <span>5. Eye-Tracking Ad-Forge</span>
+              <span className="px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 font-mono text-[9px] font-black">
+                HEATMAP
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveModule("focus-group")}
+              className={`px-3 py-2 rounded-xl font-extrabold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                activeModule === "focus-group"
+                  ? "bg-emerald-500/20 border-emerald-400 text-white shadow-[0_0_20px_rgba(16,185,129,0.35)]"
+                  : "bg-slate-900/80 border-slate-800 text-slate-300 hover:border-emerald-500/50"
+              }`}
+            >
+              <Users className="h-3.5 w-3.5 text-emerald-400" />
+              <span>🧬 6. Synthetic Focus Group &amp; ROAS Sim</span>
+              <span className="px-1.5 py-0.5 rounded bg-emerald-400 text-slate-950 font-mono text-[9px] font-black">
+                ROAS
+              </span>
+            </button>
           </div>
         </div>
       </nav>
 
       {activeModule === "factory" ? (
         <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 pt-6">
-          <VideoFactoryView initialProduct={factoryProduct} />
+          <VideoFactoryView
+            initialProduct={factoryProduct}
+            onSyncProduct={(payload) => {
+              syncProductToGlobalLock(payload);
+            }}
+            onLaunchCloser={(payload) => {
+              syncProductToGlobalLock(payload);
+              setActiveModule("live-closer");
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          />
+        </main>
+      ) : activeModule === "live-closer" ? (
+        <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 pt-6">
+          <LiveCloserModule
+            activeProduct={activeProduct}
+            allProducts={allProducts}
+            onSelectProduct={handleSelectGlobalProduct}
+            customAngleImages={customAngleImages}
+          />
+        </main>
+      ) : activeModule === "livestream-host" ? (
+        <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 pt-6">
+          <LiveStreamHostModule
+            activeProduct={activeProduct}
+            allProducts={allProducts}
+            onSelectProduct={handleSelectGlobalProduct}
+            customAngleImages={customAngleImages}
+          />
+        </main>
+      ) : activeModule === "neural-ad-forge" ? (
+        <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 pt-6">
+          <NeuralAdForgeModule
+            activeProduct={activeProduct}
+            allProducts={allProducts}
+            onSelectProduct={handleSelectGlobalProduct}
+          />
+        </main>
+      ) : activeModule === "focus-group" ? (
+        <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 pt-6">
+          <SyntheticFocusGroupModule
+            activeProduct={activeProduct}
+            allProducts={allProducts}
+            onSelectProduct={handleSelectGlobalProduct}
+          />
         </main>
       ) : (
         <>
           {/* NASA COMMAND HEADER */}
-          <header className="sticky top-[61px] z-30 border-b border-slate-800/80 bg-[#070b17]/90 backdrop-blur-md">
+          <header className="border-b border-slate-800/80 bg-[#070b17]/90 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className="h-11 w-11 rounded-xl bg-cyan-500/10 border border-cyan-500/40 flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.25)]">
@@ -661,7 +917,19 @@ export default function NasaSwarmCommandCenter() {
                 {logs.map((log, idx) => (
                   <button
                     key={log.id || idx}
-                    onClick={() => setSelectedRunIdx(idx)}
+                    onClick={() => {
+                      setSelectedRunIdx(idx);
+                      syncProductToGlobalLock({
+                        product_name: log.product_name || "AERO NITRO-BOUNCE X9",
+                        url: log.target_url || "",
+                        price:
+                          log.diagnostic_data?.detected_price || "Rp 2.490.000",
+                        features:
+                          log.diagnostic_data?.key_features?.join(", ") ||
+                          log.final_solution?.ad_copy_headline ||
+                          "Sol Nitro-Bounce 42mm ultra empuk, Carbon Torq-Blade",
+                      });
+                    }}
                     className={`px-2.5 py-1 rounded text-xs font-mono transition cursor-pointer flex items-center gap-1.5 ${
                       selectedRunIdx === idx
                         ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
@@ -1203,22 +1471,13 @@ export default function NasaSwarmCommandCenter() {
 
               {/* TAHAP B: 1-CLICK APPROVE & PUSH TO PRODUCTION / SHEETS BUTTON */}
               {currentRun && (
-                <div className="pt-2">
+                <div className="pt-2 space-y-2">
                   {currentApprovalStatus === "APPROVED" ? (
-                    <div className="space-y-2">
-                      <div className="w-full py-3 px-4 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 font-mono text-xs font-bold flex items-center justify-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                        <span>
-                          APPROVED & PUSHED TO PRODUCTION / SHEETS
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => handleTriggerVideoFactory(currentRun)}
-                        className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-500 hover:opacity-95 text-white font-mono text-xs font-bold shadow-[0_0_25px_rgba(168,85,247,0.35)] flex items-center justify-center gap-2 transition cursor-pointer"
-                      >
-                        <Sparkles className="h-4 w-4 text-cyan-300" />
-                        <span>🎬 Generate 60fps Promo Video from Approved SEO</span>
-                      </button>
+                    <div className="w-full py-3 px-4 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 font-mono text-xs font-bold flex items-center justify-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                      <span>
+                        APPROVED &amp; PUSHED TO PRODUCTION / SHEETS
+                      </span>
                     </div>
                   ) : (
                     <button
@@ -1229,16 +1488,36 @@ export default function NasaSwarmCommandCenter() {
                       {isApprovingId === currentRun.id ? (
                         <>
                           <RefreshCw className="h-4 w-4 animate-spin" />
-                          Pushing to Supabase & Google Sheets...
+                          Pushing to Supabase &amp; Google Sheets...
                         </>
                       ) : (
                         <>
                           <Send className="h-4 w-4" />
-                          ⚡ Approve & Push to Production/Sheets
+                          ⚡ Approve &amp; Push to Production/Sheets
                         </>
                       )}
                     </button>
                   )}
+
+                  {/* CROSS-MODULE BRIDGE BUTTONS: SEND DIRECTLY TO MODUL 2 & MODUL 3 */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleTriggerVideoFactory(currentRun)}
+                      className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-500 hover:opacity-95 text-white font-mono text-[11px] font-bold shadow-[0_0_20px_rgba(168,85,247,0.3)] flex items-center justify-center gap-1.5 transition cursor-pointer"
+                    >
+                      <Sparkles className="h-3.5 w-3.5 text-cyan-300" />
+                      <span>🎬 Send to Modul 2 (60fps Video)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleTriggerCloserFromSwarm(currentRun)}
+                      className="w-full py-2.5 px-3 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-300 font-mono text-[11px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                    >
+                      <Mic className="h-3.5 w-3.5 text-cyan-400" />
+                      <span>🎙️ Send to Modul 3 (Voice Closer)</span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -1371,6 +1650,13 @@ export default function NasaSwarmCommandCenter() {
       </main>
         </>
       )}
+
+      {/* THE GOD-BUTTON LIVE ORCHESTRATION MODAL */}
+      <GodButtonOrchestratorModal
+        isOpen={isGodModalOpen}
+        onClose={() => setIsGodModalOpen(false)}
+        product={activeProduct}
+      />
     </div>
   );
 }

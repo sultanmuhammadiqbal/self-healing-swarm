@@ -7,6 +7,85 @@ interface FactoryGenerateRequest {
   features?: string;
   angle?: "comfort" | "style" | "price_drop";
   copywriting?: string;
+  autofill_from_url?: boolean;
+}
+
+async function scrapeUrlForAutofill(targetUrl: string): Promise<{
+  product_name: string;
+  price: string;
+  features: string;
+}> {
+  let cleanUrl = targetUrl.trim();
+  if (!cleanUrl.startsWith("http")) {
+    cleanUrl = `https://${cleanUrl}`;
+  }
+
+  // Fallback derived from URL slug
+  let fallbackName = "AeroStreet Vulcan X-Pro";
+  try {
+    const u = new URL(cleanUrl);
+    const parts = u.pathname.split("/").filter(Boolean);
+    const lastSlug = parts[parts.length - 1] || u.hostname.replace("www.", "");
+    fallbackName = lastSlug
+      .replace(/[-_]/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+      .slice(0, 42);
+  } catch {
+    // ignore URL parse error
+  }
+
+  let scrapedName = fallbackName;
+  let scrapedPrice = "Rp 2.490.000";
+  let scrapedFeatures =
+    "Sol Nitro-Bounce 42mm ultra empuk, Carbon Torq-Blade, Breathable Mesh 3D";
+
+  try {
+    const res = await fetch(cleanUrl, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (res.ok) {
+      const html = await res.text();
+      const h1Match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+      const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+      const metaMatch = html.match(
+        /<meta[^>]*name=["']description["'][^>]*content=["']([^"']*)["']/i
+      );
+      const priceMatch = html.match(/Rp\s?[\d.]{5,15}/i);
+
+      const rawTitle = (
+        h1Match?.[1] ||
+        titleMatch?.[1] ||
+        fallbackName
+      )
+        .replace(/<[^>]+>/g, "")
+        .replace(/\s+/g, " ")
+        .split("|")[0]
+        .split("-")[0]
+        .trim();
+
+      if (rawTitle && rawTitle.length >= 3) {
+        scrapedName = rawTitle.slice(0, 48);
+      }
+      if (priceMatch?.[0]) {
+        scrapedPrice = priceMatch[0].trim();
+      }
+      if (metaMatch?.[1] && metaMatch[1].trim().length > 15) {
+        scrapedFeatures = metaMatch[1].trim().slice(0, 110);
+      }
+    }
+  } catch {
+    // Use intelligent URL slug fallback
+  }
+
+  return {
+    product_name: scrapedName,
+    price: scrapedPrice,
+    features: scrapedFeatures,
+  };
 }
 
 interface WordTimestamp {
@@ -147,10 +226,30 @@ export async function POST(req: NextRequest) {
   try {
     const body: FactoryGenerateRequest = await req.json();
 
-    const productName = body.product_name || "AeroStreet Vulcan X-Pro";
-    const price = body.price || "Rp 249.000";
-    const features = body.features || "Sol Nitro-Bounce ultra empuk, breathable carbon mesh, anti-slip grip";
+    let autofilled: {
+      product_name: string;
+      price: string;
+      features: string;
+      url: string;
+    } | null = null;
+
+    let productName = body.product_name || "AeroStreet Vulcan X-Pro";
+    let price = body.price || "Rp 249.000";
+    let features =
+      body.features ||
+      "Sol Nitro-Bounce ultra empuk, breathable carbon mesh, anti-slip grip";
     const angle = body.angle || "comfort";
+
+    if (body.autofill_from_url && body.url && body.url.trim()) {
+      const scraped = await scrapeUrlForAutofill(body.url);
+      productName = scraped.product_name;
+      price = scraped.price;
+      features = scraped.features;
+      autofilled = {
+        ...scraped,
+        url: body.url.trim(),
+      };
+    }
 
     // 1. Generate Voice Over script with strict Hard-Guards
     const scriptInfo = generateCompliantScript(productName, price, features, angle);
@@ -252,6 +351,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      autofilled,
       manifest,
       video_preview_url: "/renders/viral_video_v4_multiangle.mp4",
       audio_url: "/renders/master_audio.wav",
